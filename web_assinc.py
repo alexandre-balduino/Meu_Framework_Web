@@ -1,3 +1,4 @@
+
 import asyncio
 
 class MeuFramework:
@@ -5,29 +6,31 @@ class MeuFramework:
         self.rotas = {}
 
     def get(self, caminho):
-        """Decorador para registrar rotas GET."""
         def decorador(funcao):
             self.rotas[caminho] = funcao
             return funcao
         return decorador
 
-    async def ler_request(self, reader, writer):
-        dados = await reader.read(1024)
+    async def gerenciar_conexao(self, leitor, escritor):
+        dados = await leitor.read(1024)
         requisicao = dados.decode()
         
         if not requisicao:
-            writer.close()
+            escritor.close()
+            await escritor.wait_closed()
             return
 
-        linha_inicial = requisicao.split('\n')[0]
-        metodo, path, _ = linha_inicial.split()
+        primeira_linha = requisicao.split('\n')[0]
+        metodo, caminho, _ = primeira_linha.split(' ')
 
-        if path in self.rotas:
-            corpo = await self.rotas[path]()
+        funcao_rota = self.rotas.get(caminho)
+
+        if funcao_rota:
+            corpo = await funcao_rota()
             status = "200 OK"
         else:
-            corpo = "<h1>404</h1><p>Página não encontrada</p>"
-            status = "404 Not Found"
+            corpo = "<h1>404 Not Found</h1>"
+            status = "404 NOT FOUND"
 
         corpo_bytes = corpo.encode('utf-8')
         resposta = (
@@ -38,16 +41,17 @@ class MeuFramework:
             "\r\n"
         ).encode('utf-8') + corpo_bytes
 
-        writer.write(resposta)
-        await writer.drain()
-        writer.close()
+        escritor.write(resposta)
+        await escritor.drain() 
+        escritor.close()
+        await escritor.wait_closed()
 
-    def run(self, host='127.0.0.1', port=9000):
+    def run(self, host='127.0.0.1', porta=9000):
         async def main():
-            server = await asyncio.start_server(self.ler_request, host, port)
-            print(f"🚀 Framework rodando em http://{host}:{port}")
-            async with server:
-                await server.serve_forever()
+            servidor = await asyncio.start_server(self.gerenciar_conexao, host, porta)
+            print(f"🚀 Servidor rodando em http://{host}:{porta}")
+            async with servidor:
+                await servidor.serve_forever()
         
         try:
             asyncio.run(main())
