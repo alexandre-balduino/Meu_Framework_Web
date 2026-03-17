@@ -1,3 +1,6 @@
+
+import socket
+
 class MeuFramework:
     def __init__(self):
         self.rotas = {}
