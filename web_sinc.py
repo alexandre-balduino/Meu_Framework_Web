@@ -33,8 +33,10 @@ class MeuFramework:
                     corpo = linhas[-1]
                     if corpo:
                         for par in corpo.split('&'):
-                            chave, valor = par.split('=')
-                            dados_formulario[chave] = valor
+                            # Adicionada a verificação para garantir simetria com o async
+                            if '=' in par:
+                                chave, valor = par.split('=')
+                                dados_formulario[chave] = valor
 
                 funcao_rota = self.rotas.get((caminho, metodo))
                 
