@@ -2,18 +2,23 @@
 import socket
 import re
 from datetime import datetime
+from jinja2 import Environment, FileSystemLoader
 
 class MeuFramework:
-    def __init__(self):
-        self.rotas = [] # Mudamos para lista para manter a ordem e iterar
+    def __init__(self, pasta_templates='templates'):
+        self.rotas = []
+        # Configuração do Jinja2
+        self.jinja_env = Environment(loader=FileSystemLoader(pasta_templates))
+
+    def render_template(self, nome_arquivo, **contexto):
+        """Renderiza um arquivo HTML usando Jinja2"""
+        template = self.jinja_env.get_template(nome_arquivo)
+        return template.render(**contexto)
 
     def rota(self, caminho, metodos=['GET']):
         def decorador(funcao):
-            # Converte <parametro> para um grupo de captura regex
-            # Ex: /perfil/<nome> -> ^/perfil/(?P<nome>[^/]+)$
             padrao_regex = re.sub(r'<(\w+)>', r'(?P<\1>[^/]+)', caminho)
             regex_compilada = re.compile(f"^{padrao_regex}$")
-            
             for metodo in metodos:
                 self.rotas.append({
                     'metodo': metodo.upper(),
@@ -47,21 +52,18 @@ class MeuFramework:
                                 k, v = par.split('=')
                                 dados_corpo[k] = v
 
-                # Busca a rota por Regex
                 funcao_rota = None
                 params_url = {}
-                
                 for r in self.rotas:
                     match = r['regex'].match(caminho)
                     if match and r['metodo'] == metodo:
                         funcao_rota = r['funcao']
-                        params_url = match.groupdict() # Extrai os <parametros>
+                        params_url = match.groupdict()
                         break
 
                 if funcao_rota:
                     try:
-                        # Une os dados do corpo com os da URL
-                        argumentos = {**params_url, **dados_corpo} if dados_corpo else params_url
+                        argumentos = {**params_url, **dados_corpo}
                         corpo_res = funcao_rota(**argumentos) if argumentos else funcao_rota()
                         status = "200 OK"
                     except Exception as e:
@@ -73,8 +75,8 @@ class MeuFramework:
                     status = "404 NOT FOUND"
 
                 self._log(metodo, caminho, status)
-                resposta = (f"HTTP/1.1 {status}\r\nContent-Type: text/html\r\n"
-                            f"Content-Length: {len(corpo_res.encode())}\r\n\r\n{corpo_res}")
+                resposta = (f"HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\n"
+                            f"Content-Length: {len(corpo_res.encode('utf-8'))}\r\n\r\n{corpo_res}")
                 conexao.sendall(resposta.encode('utf-8'))
             finally:
                 conexao.close()
