@@ -1,22 +1,31 @@
 
 import socket
+import re
 from datetime import datetime
 
 class MeuFramework:
     def __init__(self):
-        self.rotas = {}
+        self.rotas = [] # Mudamos para lista para manter a ordem e iterar
 
     def rota(self, caminho, metodos=['GET']):
         def decorador(funcao):
+            # Converte <parametro> para um grupo de captura regex
+            # Ex: /perfil/<nome> -> ^/perfil/(?P<nome>[^/]+)$
+            padrao_regex = re.sub(r'<(\w+)>', r'(?P<\1>[^/]+)', caminho)
+            regex_compilada = re.compile(f"^{padrao_regex}$")
+            
             for metodo in metodos:
-                self.rotas[(caminho, metodo.upper())] = funcao
+                self.rotas.append({
+                    'metodo': metodo.upper(),
+                    'regex': regex_compilada,
+                    'funcao': funcao
+                })
             return funcao
         return decorador
 
     def _log(self, metodo, caminho, status):
-        """Imprime o log formatado no terminal"""
         horario = datetime.now().strftime('%H:%M:%S')
-        cor = "\033[92m" if "200" in status else "\033[91m" # Verde para OK, Vermelho para Erro
+        cor = "\033[92m" if "200" in status else "\033[91m"
         print(f"[{horario}] {metodo} {caminho} - {cor}{status}\033[0m")
 
     def _processar_requisicoes(self, servidor):
@@ -32,20 +41,31 @@ class MeuFramework:
                 dados_corpo = {}
                 if metodo != 'GET':
                     corpo = linhas[-1]
-                    if corpo:
+                    if corpo and '=' in corpo:
                         for par in corpo.split('&'):
                             if '=' in par:
-                                chave, valor = par.split('=')
-                                dados_corpo[chave] = valor
+                                k, v = par.split('=')
+                                dados_corpo[k] = v
 
-                funcao_rota = self.rotas.get((caminho, metodo))
+                # Busca a rota por Regex
+                funcao_rota = None
+                params_url = {}
                 
+                for r in self.rotas:
+                    match = r['regex'].match(caminho)
+                    if match and r['metodo'] == metodo:
+                        funcao_rota = r['funcao']
+                        params_url = match.groupdict() # Extrai os <parametros>
+                        break
+
                 if funcao_rota:
                     try:
-                        corpo_res = funcao_rota(dados_corpo) if metodo != 'GET' else funcao_rota()
+                        # Une os dados do corpo com os da URL
+                        argumentos = {**params_url, **dados_corpo} if dados_corpo else params_url
+                        corpo_res = funcao_rota(**argumentos) if argumentos else funcao_rota()
                         status = "200 OK"
                     except Exception as e:
-                        print(f"❌ Erro na execução da rota: {e}")
+                        print(f"❌ Erro: {e}")
                         corpo_res = "<h1>500 Internal Server Error</h1>"
                         status = "500 ERROR"
                 else:
@@ -53,14 +73,8 @@ class MeuFramework:
                     status = "404 NOT FOUND"
 
                 self._log(metodo, caminho, status)
-
-                resposta = (
-                    f"HTTP/1.1 {status}\r\n"
-                    "Content-Type: text/html; charset=utf-8\r\n"
-                    f"Content-Length: {len(corpo_res.encode('utf-8'))}\r\n"
-                    "Connection: close\r\n\r\n"
-                    f"{corpo_res}"
-                )
+                resposta = (f"HTTP/1.1 {status}\r\nContent-Type: text/html\r\n"
+                            f"Content-Length: {len(corpo_res.encode())}\r\n\r\n{corpo_res}")
                 conexao.sendall(resposta.encode('utf-8'))
             finally:
                 conexao.close()
@@ -71,9 +85,6 @@ class MeuFramework:
         servidor.bind((host, porta))
         servidor.listen(5)
         print(f"🚀 Servidor Síncrono em http://{host}:{porta}")
-        try:
-            self._processar_requisicoes(servidor)
-        except KeyboardInterrupt:
-            print("\n🛑 Servidor desligado.")
-        finally:
-            servidor.close()
+        try: self._processar_requisicoes(servidor)
+        except KeyboardInterrupt: print("\n🛑 Desligado.")
+        finally: servidor.close()
