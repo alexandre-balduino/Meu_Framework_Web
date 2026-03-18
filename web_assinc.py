@@ -2,10 +2,16 @@
 import asyncio
 import re
 from datetime import datetime
+from jinja2 import Environment, FileSystemLoader
 
 class MeuFramework:
-    def __init__(self):
+    def __init__(self, pasta_templates='templates'):
         self.rotas = []
+        self.jinja_env = Environment(loader=FileSystemLoader(pasta_templates))
+
+    def render_template(self, nome_arquivo, **contexto):
+        template = self.jinja_env.get_template(nome_arquivo)
+        return template.render(**contexto)
 
     def rota(self, caminho, metodos=['GET']):
         def decorador(funcao):
@@ -50,7 +56,7 @@ class MeuFramework:
 
             if funcao_rota:
                 try:
-                    argumentos = {**params_url, **dados_corpo} if dados_corpo else params_url
+                    argumentos = {**params_url, **dados_corpo}
                     corpo_res = await funcao_rota(**argumentos) if argumentos else await funcao_rota()
                     status = "200 OK"
                 except Exception as e:
@@ -60,9 +66,9 @@ class MeuFramework:
                 corpo_res = "<h1>404 Not Found</h1>"; status = "404 NOT FOUND"
 
             self._log(metodo, caminho, status)
-            corpo_bytes = corpo_res.encode()
+            corpo_bytes = corpo_res.encode('utf-8')
             resposta = (f"HTTP/1.1 {status}\r\nContent-Length: {len(corpo_bytes)}\r\n"
-                        f"Content-Type: text/html\r\n\r\n").encode() + corpo_bytes
+                        f"Content-Type: text/html; charset=utf-8\r\n\r\n").encode() + corpo_bytes
             escritor.write(resposta)
             await escritor.drain()
         finally:
