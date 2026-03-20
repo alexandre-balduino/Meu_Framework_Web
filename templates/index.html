@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/static/estilo.css">
+    <title>Meu Framework</title>
+</head>
+<body>
+    <div class="container">
+        {% if nome %}
+            <h1>Olá, {{ nome }}! 👋</h1>
+            <p>Seja bem-vindo ao site rodando no meu framework assíncrono.</p>
+            <a href="/">Voltar</a>
+        {% else %}
+            <h1>Quem é você?</h1>
+            <form action="/boas-vindas" method="POST">
+                <input type="text" name="usuario" placeholder="Digite seu nome" required>
+                <button type="submit">Entrar</button>
+            </form>
+        {% endif %}
+    </div>
+</body>
+</html>

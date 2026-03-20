@@ -5,17 +5,28 @@ import os
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 
+
 class MeuFramework:
     def __init__(self, pasta_templates='templates', pasta_static='static'):
         self.rotas = []
-        self.pasta_static = pasta_static
-        # Configuração do Jinja2
-        self.jinja_env = Environment(loader=FileSystemLoader(pasta_templates))
-
+        
+        # Caminho base do arquivo app.py
+        caminho_base = os.path.abspath(os.path.dirname(__file__))
+        
+        # Caminho absoluto para Templates (Jinja2)
+        self.caminho_templates = os.path.join(caminho_base, pasta_templates)
+        self.jinja_env = Environment(loader=FileSystemLoader(self.caminho_templates))
+        
+        # Caminho absoluto para Static (Novo!)
+        self.caminho_static_abs = os.path.join(caminho_base, pasta_static)
+        self.pasta_static = pasta_static # Guardamos o nome ('static')
+        
+        
     def render_template(self, nome_arquivo, **contexto):
         """Renderiza um arquivo HTML usando Jinja2"""
         template = self.jinja_env.get_template(nome_arquivo)
         return template.render(**contexto)
+
 
     def _obter_tipo_conteudo(self, caminho_arquivo):
         """Identifica o MIME Type para arquivos estáticos"""
@@ -32,6 +43,7 @@ class MeuFramework:
         _, ext = os.path.splitext(caminho_arquivo)
         return extensoes.get(ext.lower(), 'text/plain')
 
+
     def rota(self, caminho, metodos=['GET']):
         """Decorador para registrar rotas com Regex e múltiplos métodos"""
         def decorador(funcao):
@@ -46,11 +58,13 @@ class MeuFramework:
             return funcao
         return decorador
 
+
     def _log(self, metodo, caminho, status):
         """Logger para o terminal"""
         horario = datetime.now().strftime('%H:%M:%S')
         cor = "\033[94m" if "200" in status else "\033[93m"
         print(f"[{horario}] {metodo} {caminho} - {cor}{status}\033[0m")
+
 
     async def gerenciar_conexao(self, leitor, escritor):
         metodo, caminho = "???", "???"
@@ -127,6 +141,7 @@ class MeuFramework:
         finally:
             escritor.close()
             await escritor.wait_closed()
+
 
     def servir(self, host='127.0.0.1', porta=9000):
         async def main():
