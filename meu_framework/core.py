@@ -1,113 +1,86 @@
 
-import re
 import os
-import sys
 import inspect
-from datetime import datetime
-from .templating import TemplateEngine
+from jinja2 import Environment, FileSystemLoader
+from .requests import Request
+from .logger import Logger
 
-class MeuFramework:
-    def __init__(self, templates='templates', static='static'):
-        self.rotas = []
+class MyFramework:
+    """
+    Classe principal do framework que gerencia roteamento e templates.
+    Identifica automaticamente os caminhos base do projeto do usuário.
+    """
+    def __init__(self, static_folder='static', template_folder='templates'):
+        """
+        Inicializa o MyFramework com detecção automática de caminho.
+        """
+        # INICIALIZAÇÃO CRITICAL: O dicionário de rotas deve existir antes de qualquer decorator!
+        self.routes = {}
         
-        # --- LÓGICA DE CAMINHOS BLINDADOS (ANDROID/TERMUX) ---
-        # sys.argv[0] pega o caminho real do app.py que você executou
-        caminho_execucao = os.path.abspath(sys.argv[0])
-        self.diretorio_base = os.path.dirname(caminho_execucao)
+        # Detecta o diretório do arquivo que instanciou a classe (o app.py do usuário)
+        stack = inspect.stack()
+        caller_frame = stack[1]
+        caller_path = os.path.abspath(caller_frame.filename)
+        self.base_dir = os.path.dirname(caller_path)
+
+        # Configura os caminhos absolutos
+        self.static_folder = static_folder
+        self.template_folder = template_folder
+        self.static_abs_path = os.path.join(self.base_dir, self.static_folder)
+        self.template_abs_path = os.path.join(self.base_dir, self.template_folder)
         
-        # Montagem dos caminhos absolutos para evitar Erro 500
-        self.caminho_templates_abs = os.path.join(self.diretorio_base, templates)
-        self.caminho_static_abs = os.path.join(self.diretorio_base, static)
-        self.pasta_static = static
+        # Inicializa o motor Jinja2 apontando para o caminho absoluto detectado
+        if os.path.exists(self.template_abs_path):
+            self.env = Environment(loader=FileSystemLoader(self.template_abs_path))
+        else:
+            self.env = None
+            Logger.error(f"Pasta de templates não encontrada em: {self.template_abs_path}")
 
-        # Inicializa o motor de templates (Jinja2)
-        self.tpl_engine = TemplateEngine(self.caminho_templates_abs)
+    def route(self, path, methods=['GET']):
+        """
+        Decorator para registrar funções como manipuladores de rotas.
+        """
+        def wrapper(handler):
+            # Agora self.routes existe e não dará mais AttributeError
+            self.routes[path] = {
+                'handler': handler, 
+                'methods': [m.upper() for m in methods]
+            }
+            return handler
+        return wrapper
+
+    def render_template(self, template_name, **context):
+        """
+        Renderiza um arquivo HTML usando Jinja2.
+        """
+        if not self.env:
+            return "<h1>Template Error</h1><p>Pasta 'templates' não detectada no seu projeto.</p>"
+        try:
+            template = self.env.get_template(template_name)
+            return template.render(**context)
+        except Exception as e:
+            Logger.error(f"Erro ao renderizar {template_name}: {e}")
+            return f"<h1>Template Error</h1><p>{e}</p>"
+
+    async def dispatch(self, method, path, headers, body=None):
+        """
+        Despacha a requisição para a função de rota correta.
+        """
+        request = Request(method, path, headers, body)
         
-        print(f"📂 Framework ativo em: {self.diretorio_base}")
+        if request.path not in self.routes:
+            return "<h1>404 Not Found</h1>", "404 NOT FOUND"
 
-    def rota(self, caminho, metodos=['GET']):
-        """Decorador para registrar rotas com Regex e múltiplos métodos"""
-        def decorador(funcao):
-            # Transforma <parametro> em Regex nomeado (?P<parametro>[^/]+)
-            padrao = re.sub(r'<(\w+)>', r'(?P<\1>[^/]+)', caminho)
-            regex = re.compile(f"^{padrao}$")
-            for m in metodos:
-                self.rotas.append({
-                    'metodo': m.upper(), 
-                    'regex': regex, 
-                    'funcao': funcao
-                })
-            return funcao
-        return decorador
+        route_data = self.routes[request.path]
 
-    def render_template(self, name, **ctx):
-        """Atalho para renderizar HTML via Jinja2"""
-        return self.tpl_engine.render(name, **ctx)
+        if request.method not in route_data['methods']:
+            return "<h1>405 Method Not Allowed</h1>", "405 METHOD NOT ALLOWED"
 
-    async def processar_rota(self, metodo, caminho, dados_corpo):
-        """O Cérebro: decide qual função chamar e injeta os parâmetros certos"""
-        funcao_rota = None
-        params_url = {}
-
-        # 1. Busca a rota correta
-        for r in self.rotas:
-            match = r['regex'].match(caminho)
-            if match and r['metodo'] == metodo:
-                funcao_rota = r['funcao']
-                params_url = match.groupdict()
-                break
-
-        if funcao_rota:
-            try:
-                # 2. INJEÇÃO DE DEPENDÊNCIA (Professional Feature)
-                # Mistura dados da URL com dados do formulário (POST)
-                todos_dados = {**params_url, **dados_corpo}
-                
-                # Descobre o que a função realmente pede como argumento
-                sig = inspect.signature(funcao_rota)
-                args_filtrados = {
-                    k: v for k, v in todos_dados.items() if k in sig.parameters
-                }
-
-                # 3. Executa a função (assíncrona ou não)
-                if inspect.iscoroutinefunction(funcao_rota):
-                    corpo = await funcao_rota(**args_filtrados)
-                else:
-                    corpo = funcao_rota(**args_filtrados)
-                
-                return corpo, "200 OK"
-            except Exception as e:
-                return f"<h1>500 Erro Interno</h1><p>{e}</p>", "500 ERROR"
-        
-        return "<h1>404 Not Found</h1>", "404 NOT FOUND"
-
-    # --- MÉTODO PARA O SERVIDOR NATIVO (SOCKETS) ---
-    def servir(self, host='127.0.0.1', porta=9000):
-        """Inicia o servidor embutido (BuiltInServer)"""
-        from .server import BuiltInServer
-        server = BuiltInServer(self)
-        server.run(host, porta)
-
-    # --- MÉTODO PARA O UVICORN (ASGI INTERFACE) ---
-    async def __call__(self, scope, receive, send):
-        """Interface que permite rodar com: uvicorn app:app"""
-        if scope['type'] != 'http':
-            return
-
-        caminho = scope['path']
-        metodo = scope['method']
-
-        # Parsing de corpo simplificado para ASGI
-        dados_corpo = {}
-        if metodo == 'POST':
-            message = await receive()
-            body = message.get('body', b'').decode()
-            if body:
-                for par in body.split('&'):
-                    if '=' in par:
-                        k, v = par.split('=')
-                        dados_corpo[k] = v
-
-        # Processa a lógica
-        corpo_res, status_str = await self.processar_rota(metodo, caminho, dados_corpo)
-        status_code = int(status_str.split(' '))
+        try:
+            handler = route_data['handler']
+            response_content = await handler(request)
+            return response_content, "200 OK"
+            
+        except Exception as e:
+            Logger.error(f"Erro na rota {path}: {e}")
+            raise e

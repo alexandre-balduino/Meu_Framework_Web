@@ -3,22 +3,23 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="/static/estilo.css">
-    <title>Meu Framework</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Framework - Home</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container">
-        {% if nome %}
-            <h1>Olá, {{ nome }}! 👋</h1>
-            <p>Seja bem-vindo ao site rodando no meu framework assíncrono.</p>
-            <a href="/">Voltar</a>
-        {% else %}
-            <h1>Quem é você?</h1>
-            <form action="/boas-vindas" method="POST">
-                <input type="text" name="usuario" placeholder="Digite seu nome" required>
-                <button type="submit">Entrar</button>
-            </form>
-        {% endif %}
-    </div>
+    <h1>Bem-vindo ao Framework! 🚀</h1>
+    
+    {% if nome %}
+        <p>Olá, <strong>{{ nome }}</strong>! Seu cadastro foi recebido.</p>
+    {% else %}
+        <p>Esta página foi renderizada usando <strong>Jinja2</strong>.</p>
+    {% endif %}
+
+    <hr>
+    <nav>
+        <a href="/register">Ir para Cadastro (Python DSL)</a> | 
+        <a href="/list">Ver Leads no Banco</a>
+    </nav>
 </body>
 </html>

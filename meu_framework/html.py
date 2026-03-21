@@ -1,67 +1,75 @@
 
-def tag(nome, conteudo="", **attrs):
-    """Função base para gerar qualquer tag HTML com atributos."""
-    html_attrs = " ".join([
-        f'{k.replace("_", "-").rstrip("-")}="{v}"' 
-        for k, v in attrs.items()
-    ])
-    abertura = f"<{nome} {html_attrs}>" if html_attrs else f"<{nome}>"
+def tag(_tag_name, *content, **attrs):
+    """
+    Função base universal para gerar qualquer tag HTML.
+    Utiliza _tag_name com underscore para evitar conflitos com o atributo 'name' do HTML.
+    """
+    processed_attrs = []
+    for k, v in attrs.items():
+        # Remove o underscore no final para permitir palavras reservadas (class_, for_)
+        # Converte underscores no meio em hifens (data_id -> data-id)
+        key = k.rstrip("_").replace("_", "-")
+        processed_attrs.append(f' {key}="{v}"')
     
-    # Tags auto-contidas
-    if nome in ['input', 'img', 'br', 'hr', 'link', 'meta', 'source']:
-        return abertura
-    return f"{abertura}{conteudo}</{nome}>"
+    props = "".join(processed_attrs)
+    inner = "".join(list(content))
+    return f"<{_tag_name}{props}>{inner}</{_tag_name}>"
 
-# --- ESTRUTURA E SEMÂNTICA ---
-def doc(titulo, conteudo, lang="pt-br", head_extra=""):
-    css = tag('link', rel="stylesheet", href="/static/estilo.css")
-    h = tag('head', tag('meta', charset="UTF-8") + tag('title', titulo) + css + head_extra)
-    return f"<!DOCTYPE html><html lang='{lang}'>{h}{tag('body', conteudo)}</html>"
+# --- Cabeçalhos (Headers) ---
+def h1(*args, **kwargs): return tag("h1", *args, **kwargs)
+def h2(*args, **kwargs): return tag("h2", *args, **kwargs)
+def h3(*args, **kwargs): return tag("h3", *args, **kwargs)
+def h4(*args, **kwargs): return tag("h4", *args, **kwargs)
+def h5(*args, **kwargs): return tag("h5", *args, **kwargs)
+def h6(*args, **kwargs): return tag("h6", *args, **kwargs)
 
-def header(*args, **attrs): return tag('header', "".join(args), **attrs)
-def footer(*args, **attrs): return tag('footer', "".join(args), **attrs)
-def main(*args, **attrs): return tag('main', "".join(args), **attrs)
-def nav(*args, **attrs): return tag('nav', "".join(args), **attrs)
-def aside(*args, **attrs): return tag('aside', "".join(args), **attrs)
-def article(*args, **attrs): return tag('article', "".join(args), **attrs)
+# --- Tags de Layout e Texto ---
+def div(*args, **kwargs): return tag("div", *args, **kwargs)
+def section(*args, **kwargs): return tag("section", *args, **kwargs)
+def span(*args, **kwargs): return tag("span", *args, **kwargs)
+def p(*args, **kwargs): return tag("p", *args, **kwargs)
+def a(*args, **kwargs): return tag("a", *args, **kwargs)
+def strong(*args, **kwargs): return tag("strong", *args, **kwargs)
+def em(*args, **kwargs): return tag("em", *args, **kwargs)
 
-# --- CABEÇALHOS (H1-H6) ---
-def h1(t, **a): return tag('h1', t, **a)
-def h2(t, **a): return tag('h2', t, **a)
-def h3(t, **a): return tag('h3', t, **a)
-def h4(t, **a): return tag('h4', t, **a)
-def h5(t, **a): return tag('h5', t, **a)
-def h6(t, **a): return tag('h6', t, **a)
+# --- Listas ---
+def ul(*args, **kwargs): return tag("ul", *args, **kwargs)
+def li(*args, **kwargs): return tag("li", *args, **kwargs)
 
-# --- TEXTO E BLOCOS ---
-def div(*args, **attrs): return tag('div', "".join(args), **attrs)
-def p(t, **a): return tag('p', t, **a)
-def span(t, **a): return tag('span', t, **a)
-def a(t, href="#", **a): return tag('a', t, href=href, **a)
-def li(t, **a): return tag('li', t, **a)
-def ul(*args, **attrs): return tag('ul', "".join([li(i) if isinstance(i, str) else i for i in args]), **attrs)
-def br(): return tag('br')
-def hr(**a): return tag('hr', **a)
+# --- Tags de Formulário ---
+def form(*args, **kwargs): return tag("form", *args, **kwargs)
+def label(*args, **kwargs): return tag("label", *args, **kwargs)
+def button(*args, **kwargs): return tag("button", *args, **kwargs)
+def select(*args, **kwargs): return tag("select", *args, **kwargs)
+def option(*args, **kwargs): return tag("option", *args, **kwargs)
+def textarea(*args, **kwargs): return tag("textarea", *args, **kwargs)
 
-# --- TABELAS ---
-def table(*args, **attrs): return tag('table', "".join(args), **attrs)
-def thead(*args, **attrs): return tag('thead', "".join(args), **attrs)
-def tbody(*args, **attrs): return tag('tbody', "".join(args), **attrs)
-def tr(*args, **attrs): return tag('tr', "".join([tag('td', str(i)) if not str(i).startswith('<td') else i for i in args]), **attrs)
+def input_(**kwargs):
+    """
+    Gera uma tag <input>. Tags de input não têm fechamento </input> em HTML5.
+    Aceita o atributo 'name' sem conflitos agora.
+    """
+    props = []
+    for k, v in kwargs.items():
+        key = k.rstrip("_").replace("_", "-")
+        props.append(f' {key}="{v}"')
+    return f"<input{''.join(props)}>"
 
-# --- FORMULÁRIOS ---
-def form(*args, **attrs): return tag('form', "".join(args), **attrs)
-def input(**a): return tag('input', **a)
-def label(t, **a): return tag('label', t, **a)
-def button(t, **a): return tag('button', t, **a)
-def textarea(t="", **a): return tag('textarea', t, **a)
-def select(*args, **attrs): return tag('select', "".join(args), **attrs)
-def option(t, **a): return tag('option', t, **a)
-
-# --- MÍDIA E SCRIPTS ---
-def img(src, alt="", **a): return tag('img', src=src, alt=alt, **a)
-def video(*args, **attrs): return tag('video', "".join(args), **attrs)
-def script(codigo="", src="", **attrs): 
-    if src: attrs['src'] = src
-    return tag('script', codigo, **attrs)
-def iframe(src, **a): return tag('iframe', "", src=src, **a)
+# --- Estrutura de Documento Completa ---
+def doc(title, content, lang="pt-br"):
+    """
+    Gera a estrutura HTML5 completa de uma página (substitui o antigo html_full).
+    :param title: Título da aba do navegador.
+    :param content: Conteúdo HTML (body).
+    """
+    return (
+        f'<!DOCTYPE html><html lang="{lang}">'
+        f'<head>'
+        f'<meta charset="UTF-8">'
+        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        f'<title>{title}</title>'
+        f'</head>'
+        f'<body style="margin:0; font-family: sans-serif; background-color: #f4f4f4;">'
+        f'{content}'
+        f'</body></html>'
+    )
